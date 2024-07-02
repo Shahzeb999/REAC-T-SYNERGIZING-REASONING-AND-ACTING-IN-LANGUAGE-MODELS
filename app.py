@@ -1,74 +1,80 @@
 import gradio as gr
-from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
-from datasets import load_dataset
-from sklearn.metrics import accuracy_score
+import google.generativeai as palm
+from react_agent import ReActAgent  # Make sure this is the updated version
 
-# Load the model and tokenizer for AG News classification
-model_name = "distilbert-base-uncased-finetuned-sst-2-english"
-model = AutoModelForSequenceClassification.from_pretrained(model_name)
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-classifier = pipeline("zero-shot-classification", model=model, tokenizer=tokenizer)
+# Configure PaLM
+palm.configure(api_key='AIzaSyCFPXxgS8Stxq975EZSM9Rn71Q5naJXHqs')
 
-dataset = load_dataset("ag_news", split="test[:10%]")  # Using 10% of the dataset for evaluation
+agent = ReActAgent()
 
-# Label mapping for AG News dataset
-label_map = {0: "World", 1: "Sports", 2: "Business", 3: "Sci/Tech"}
+current_task = None
+actions_taken = []
+task_complete = False
+final_action = None
 
-# Define the ReAct function
-def react(news_article, human_input_needed=False, human_input=None):
-    # Step 1: Reasoning (Chain-of-Thought)
-    reasoning_trace = f"Received article: '{news_article}'"
+def start_task():
+    global current_task, actions_taken, task_complete, final_action
+    current_task = agent.get_random_task()
+    actions_taken = []
+    task_complete = False
+    final_action = None
+    return f"Current Task: {current_task['description']}", ""
+
+def process_step(feedback, modified_action):
+    global current_task, actions_taken, task_complete, final_action
     
-    # Step 2: Acting (Classification)
-    candidate_labels = list(label_map.values())
-    classification = classifier(news_article, candidate_labels)
-    label = classification['labels'][0]
-    score = classification['scores'][0]
-    action_trace = f"Classified as '{label}' with confidence score of {score:.2f}"
+    if task_complete:
+        return "Task is already complete. Start a new task.", ""
     
-    if human_input_needed and score < 0.8:
-        action_trace += " [Human input required]"
-        if human_input:
-            label = human_input
-            action_trace += f" | Human updated label to '{label}'"
+    thought = agent.reason(current_task)
+    action = agent.act(thought, current_task)
     
-    return reasoning_trace, action_trace, label, score
-
-# Gradio interface function
-def classify_news(news_article, human_input=None):
-    reasoning, action, label, score = react(news_article, human_input_needed=True, human_input=human_input)
-    response = f"Reasoning Trace: {reasoning}\nAction Trace: {action}\n\nFinal Label: {label}\nConfidence Score: {score:.2f}"
-    return response
-
-# Evaluation function
-def evaluate_model(dataset, human_input_needed=False):
-    predictions = []
-    labels = []
-    for item in dataset:
-        news_article = item['text']
-        true_label = label_map[item['label']]
-        _, _, predicted_label, _ = react(news_article, human_input_needed=human_input_needed, human_input=true_label if human_input_needed and random.random() < 0.5 else None)
-        predictions.append(predicted_label)
-        labels.append(true_label)
+    result = f"Thought: {thought}\nProposed Action: {action}\n\n"
     
-    accuracy = accuracy_score(labels, predictions)
-    return accuracy
+    if feedback == "Approve":
+        actions_taken.append(action)
+        result += f"Executing: {action}"
+    elif feedback == "Modify":
+        if modified_action:
+            actions_taken.append(modified_action)
+            result += f"Executing modified action: {modified_action}"
+        else:
+            result += "Please provide a modified action."
+    else:  # Reject
+        result += "Action rejected. Rethinking..."
+    
+    if len(actions_taken) >= len(current_task['possible_actions']):
+        task_complete = True
+        evaluation = agent.evaluate_outcome(current_task, actions_taken)
+        final_action = agent.final_task(current_task, actions_taken, evaluation)
+        result += f"\n\nTask Completed!\nEvaluation: {evaluation}\nFinal Task: {final_action}"
+    
+    result += "\n\nActions Taken:\n" + "\n".join(f"{i+1}. {action}" for i, action in enumerate(actions_taken))
+    
+    return result, ""
 
-# Perform evaluation
-base_accuracy = evaluate_model(dataset, human_input_needed=False)
-human_in_the_loop_accuracy = evaluate_model(dataset, human_input_needed=True)
-print(f"Base Model Accuracy: {base_accuracy:.2f}")
-print(f"Human-in-the-Loop Model Accuracy: {human_in_the_loop_accuracy:.2f}")
+def get_history():
+    return "Thought History:\n" + "\n".join(f"{i+1}. {thought}" for i, thought in enumerate(agent.thought_history))
 
-# Create the Gradio interface
 with gr.Blocks() as demo:
-    gr.Markdown("# News Article Classifier with Human-in-the-Loop using ReAct")
-    news_input = gr.Textbox(lines=5, label="Enter a news article:")
-    human_input = gr.Textbox(lines=1, label="Provide your input if needed:", placeholder="e.g., World, Sports, Business, Sci/Tech")
-    output = gr.Textbox(lines=10, label="Output")
+    gr.Markdown("# Human-in-the-loop ReAct Agent")
     
-    btn = gr.Button("Classify")
-    btn.click(classify_news, inputs=[news_input, human_input], outputs=output)
+    with gr.Row():
+        start_btn = gr.Button("Start New Task")
+        task_output = gr.Textbox(label="Current Task")
+    
+    with gr.Row():
+        feedback = gr.Radio(["Approve", "Modify", "Reject"], label="Your input")
+        modified_action = gr.Textbox(label="Modified Action (if applicable)")
+    
+    submit_btn = gr.Button("Submit Feedback")
+    
+    result_output = gr.Textbox(label="Result")
+    history_btn = gr.Button("Show Thought History")
+    history_output = gr.Textbox(label="Thought History")
+    
+    start_btn.click(start_task, outputs=[task_output, modified_action])
+    submit_btn.click(process_step, inputs=[feedback, modified_action], outputs=[result_output, modified_action])
+    history_btn.click(get_history, outputs=history_output)
 
-# Launch the interface
 demo.launch()

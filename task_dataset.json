@@ -1,0 +1,64 @@
+{
+    "tasks": [
+      {
+        "id": 1,
+        "description": "Plan a birthday party for a 10-year-old child",
+        "possible_actions": [
+          "Create a guest list",
+          "Choose a theme",
+          "Plan activities",
+          "Order a cake",
+          "Send invitations"
+        ],
+        "expected_outcome": "A well-organized birthday party plan"
+      },
+      {
+        "id": 2,
+        "description": "Troubleshoot a laptop that won't turn on",
+        "possible_actions": [
+          "Check power connection",
+          "Test battery",
+          "Inspect for physical damage",
+          "Try a hard reset",
+          "Check internal components"
+        ],
+        "expected_outcome": "Identify the issue preventing the laptop from turning on"
+      },
+      {
+        "id": 3,
+        "description": "Write a blog post about artificial intelligence",
+        "possible_actions": [
+          "Research current AI trends",
+          "Outline main topics",
+          "Write introduction",
+          "Develop main content",
+          "Conclude with future predictions"
+        ],
+        "expected_outcome": "A comprehensive blog post about AI"
+      },
+      {
+        "id": 4,
+        "description": "Prepare a healthy meal plan for a week",
+        "possible_actions": [
+          "Determine dietary requirements",
+          "Research balanced recipes",
+          "Create a grocery list",
+          "Plan meal prep schedule",
+          "Consider portion sizes"
+        ],
+        "expected_outcome": "A week-long healthy meal plan with shopping list"
+      },
+      {
+        "id": 5,
+        "description": "Organize a small home office",
+        "possible_actions": [
+          "Declutter workspace",
+          "Plan ergonomic layout",
+          "Organize digital files",
+          "Set up storage solutions",
+          "Improve lighting"
+        ],
+        "expected_outcome": "An efficiently organized home office space"
+      }
+    ]
+  }
